@@ -1,4 +1,4 @@
-package: bitbucket.lzd.co/lgo/rmq
+package: bitbucket.org/snapmartinc/rmq
 import:
 - package: github.com/adjust/gocheck
   version: fbc315b36e0e7dc95023e96b43af5d8de58bc6fb

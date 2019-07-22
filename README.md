@@ -1,5 +1,5 @@
 ## Hard copy of github.com/adjust/rmq, with delay functionality added
-## IMPORTANT: This package is not for import to your package. You should import bitbucket.lzd.co/lgo/redis-queue
+## IMPORTANT: This package is not for import to your package. You should import bitbucket.org/snapmartinc/redis-queue
 
 ## Basic Usage
 
@@ -10,7 +10,7 @@ Lets take a look at how to use rmq.
 Of course you need to import rmq wherever you want to use it.
 
 ```go
-import "bitbucket.lzd.co/lgo/rmq"
+import "bitbucket.org/snapmartinc/rmq"
 ```
 
 ### Connection

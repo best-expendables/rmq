@@ -1,4 +1,4 @@
-module rmq
+module bitbucket.org/snapmartinc/rmq
 
 go 1.12
 

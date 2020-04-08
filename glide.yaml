@@ -1,8 +1,0 @@
-package: bitbucket.org/snapmartinc/rmq
-import:
-- package: github.com/adjust/gocheck
-  version: fbc315b36e0e7dc95023e96b43af5d8de58bc6fb
-- package: github.com/adjust/uniuri
-  version: 498743145e60c272b71d377c4e456335e4ef7524
-- package: github.com/go-redis/redis
-  version: ^6.12.0

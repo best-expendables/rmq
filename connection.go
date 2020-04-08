@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/adjust/uniuri"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 )
 
 const heartbeatDuration = time.Minute
@@ -178,5 +178,5 @@ func (connection *redisConnection) openQueue(name string) *redisQueue {
 
 // flushDb flushes the redis database to reset everything, used in tests
 func (connection *redisConnection) flushDb() {
-	connection.redisClient.FlushDb()
+	connection.redisClient.FlushDB()
 }

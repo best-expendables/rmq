@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/adjust/uniuri"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 )
 
 const (
@@ -85,7 +85,7 @@ func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client)
 		readyKey:       readyKey,
 		rejectedKey:    rejectedKey,
 		unackedKey:     unackedKey,
-		delayedKey: 	delayedKey,
+		delayedKey:     delayedKey,
 		redisClient:    redisClient,
 	}
 	return queue
@@ -102,12 +102,12 @@ func (queue *redisQueue) Publish(payload string) bool {
 }
 
 func (queue *redisQueue) PublishOnDelay(payload string, delayedAt time.Time) bool {
-	z := redis.Z {
+	z := redis.Z{
 		Score:  float64(delayedAt.Unix()),
 		Member: payload,
 	}
 
-	result := queue.redisClient.ZAdd(queue.delayedKey, z)
+	result := queue.redisClient.ZAdd(queue.delayedKey, &z)
 	return !redisErrIsNil(result)
 }
 

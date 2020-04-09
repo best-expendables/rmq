@@ -1,9 +1,10 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 )
 
 type Delivery interface {
@@ -44,7 +45,7 @@ func (delivery *wrapDelivery) Payload() string {
 func (delivery *wrapDelivery) Ack() bool {
 	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
 
-	result := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
+	result := delivery.redisClient.LRem(context.Background(), delivery.unackedKey, 1, delivery.payload)
 	if redisErrIsNil(result) {
 		return false
 	}
@@ -65,11 +66,11 @@ func (delivery *wrapDelivery) Push() bool {
 }
 
 func (delivery *wrapDelivery) move(key string) bool {
-	if redisErrIsNil(delivery.redisClient.LPush(key, delivery.payload)) {
+	if redisErrIsNil(delivery.redisClient.LPush(context.Background(), key, delivery.payload)) {
 		return false
 	}
 
-	if redisErrIsNil(delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)) {
+	if redisErrIsNil(delivery.redisClient.LRem(context.Background(), delivery.unackedKey, 1, delivery.payload)) {
 		return false
 	}
 

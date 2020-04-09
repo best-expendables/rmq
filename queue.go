@@ -1,13 +1,14 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/adjust/uniuri"
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -98,7 +99,7 @@ func (queue *redisQueue) String() string {
 // Publish adds a delivery with the given payload to the queue
 func (queue *redisQueue) Publish(payload string) bool {
 	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
-	return !redisErrIsNil(queue.redisClient.LPush(queue.readyKey, payload))
+	return !redisErrIsNil(queue.redisClient.LPush(context.Background(), queue.readyKey, payload))
 }
 
 func (queue *redisQueue) PublishOnDelay(payload string, delayedAt time.Time) bool {
@@ -107,7 +108,7 @@ func (queue *redisQueue) PublishOnDelay(payload string, delayedAt time.Time) boo
 		Member: payload,
 	}
 
-	result := queue.redisClient.ZAdd(queue.delayedKey, &z)
+	result := queue.redisClient.ZAdd(context.Background(), queue.delayedKey, &z)
 	return !redisErrIsNil(result)
 }
 
@@ -122,11 +123,11 @@ func (queue *redisQueue) PublishBytesOnDelay(payload []byte, delayedAt time.Time
 
 // Publish rejected job to rejected queue
 func (queue *redisQueue) PublishRejected(payload string) bool {
-	if redisErrIsNil(queue.redisClient.LPush(queue.rejectedKey, payload)) {
+	if redisErrIsNil(queue.redisClient.LPush(context.Background(), queue.rejectedKey, payload)) {
 		return false
 	}
 
-	if redisErrIsNil(queue.redisClient.LRem(queue.unackedKey, 1, payload)) {
+	if redisErrIsNil(queue.redisClient.LRem(context.Background(), queue.unackedKey, 1, payload)) {
 		return false
 	}
 
@@ -151,7 +152,7 @@ func (queue *redisQueue) PurgeDelayed() int {
 func (queue *redisQueue) Close() bool {
 	queue.PurgeRejected()
 	queue.PurgeReady()
-	result := queue.redisClient.SRem(queuesKey, queue.name)
+	result := queue.redisClient.SRem(context.Background(), queuesKey, queue.name)
 	if redisErrIsNil(result) {
 		return false
 	}
@@ -159,7 +160,7 @@ func (queue *redisQueue) Close() bool {
 }
 
 func (queue *redisQueue) ReadyCount() int {
-	result := queue.redisClient.LLen(queue.readyKey)
+	result := queue.redisClient.LLen(context.Background(), queue.readyKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
@@ -167,7 +168,7 @@ func (queue *redisQueue) ReadyCount() int {
 }
 
 func (queue *redisQueue) UnackedCount() int {
-	result := queue.redisClient.LLen(queue.unackedKey)
+	result := queue.redisClient.LLen(context.Background(), queue.unackedKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
@@ -175,7 +176,7 @@ func (queue *redisQueue) UnackedCount() int {
 }
 
 func (queue *redisQueue) RejectedCount() int {
-	result := queue.redisClient.LLen(queue.rejectedKey)
+	result := queue.redisClient.LLen(context.Background(), queue.rejectedKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
@@ -183,7 +184,7 @@ func (queue *redisQueue) RejectedCount() int {
 }
 
 func (queue *redisQueue) DelayedCount() int {
-	result := queue.redisClient.ZCount(queue.delayedKey, "-inf", "+inf")
+	result := queue.redisClient.ZCount(context.Background(), queue.delayedKey, "-inf", "+inf")
 	if redisErrIsNil(result) {
 		return 0
 	}
@@ -194,14 +195,14 @@ func (queue *redisQueue) DelayedCount() int {
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
 func (queue *redisQueue) ReturnAllUnacked() int {
-	result := queue.redisClient.LLen(queue.unackedKey)
+	result := queue.redisClient.LLen(context.Background(), queue.unackedKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
 
 	unackedCount := int(result.Val())
 	for i := 0; i < unackedCount; i++ {
-		if redisErrIsNil(queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)) {
+		if redisErrIsNil(queue.redisClient.RPopLPush(context.Background(), queue.unackedKey, queue.readyKey)) {
 			return i
 		}
 		// debug(fmt.Sprintf("rmq queue returned unacked delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
@@ -213,7 +214,7 @@ func (queue *redisQueue) ReturnAllUnacked() int {
 // ReturnAllRejected moves all rejected deliveries back to the ready
 // list and returns the number of returned deliveries
 func (queue *redisQueue) ReturnAllRejected() int {
-	result := queue.redisClient.LLen(queue.rejectedKey)
+	result := queue.redisClient.LLen(context.Background(), queue.rejectedKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
@@ -230,7 +231,7 @@ func (queue *redisQueue) ReturnRejected(count int) int {
 	}
 
 	for i := 0; i < count; i++ {
-		result := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
+		result := queue.redisClient.RPopLPush(context.Background(), queue.rejectedKey, queue.readyKey)
 		if redisErrIsNil(result) {
 			return i
 		}
@@ -242,9 +243,9 @@ func (queue *redisQueue) ReturnRejected(count int) int {
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys
 func (queue *redisQueue) CloseInConnection() {
-	redisErrIsNil(queue.redisClient.Del(queue.unackedKey))
-	redisErrIsNil(queue.redisClient.Del(queue.consumersKey))
-	redisErrIsNil(queue.redisClient.SRem(queue.queuesKey, queue.name))
+	redisErrIsNil(queue.redisClient.Del(context.Background(), queue.unackedKey))
+	redisErrIsNil(queue.redisClient.Del(context.Background(), queue.consumersKey))
+	redisErrIsNil(queue.redisClient.SRem(context.Background(), queue.queuesKey, queue.name))
 }
 
 func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
@@ -265,7 +266,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	}
 
 	// add queue to list of queues consumed on this connection
-	if redisErrIsNil(queue.redisClient.SAdd(queue.queuesKey, queue.name)) {
+	if redisErrIsNil(queue.redisClient.SAdd(context.Background(), queue.queuesKey, queue.name)) {
 		log.Panicf("rmq queue failed to start consuming %s", queue)
 	}
 
@@ -306,7 +307,7 @@ func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, 
 }
 
 func (queue *redisQueue) GetConsumers() []string {
-	result := queue.redisClient.SMembers(queue.consumersKey)
+	result := queue.redisClient.SMembers(context.Background(), queue.consumersKey)
 	if redisErrIsNil(result) {
 		return []string{}
 	}
@@ -314,7 +315,7 @@ func (queue *redisQueue) GetConsumers() []string {
 }
 
 func (queue *redisQueue) RemoveConsumer(name string) bool {
-	result := queue.redisClient.SRem(queue.consumersKey, name)
+	result := queue.redisClient.SRem(context.Background(), queue.consumersKey, name)
 	if redisErrIsNil(result) {
 		return false
 	}
@@ -329,7 +330,7 @@ func (queue *redisQueue) addConsumer(tag string) string {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
-	if redisErrIsNil(queue.redisClient.SAdd(queue.consumersKey, name)) {
+	if redisErrIsNil(queue.redisClient.SAdd(context.Background(), queue.consumersKey, name)) {
 		log.Panicf("rmq queue failed to add consumer %s %s", queue, tag)
 	}
 
@@ -338,7 +339,7 @@ func (queue *redisQueue) addConsumer(tag string) string {
 }
 
 func (queue *redisQueue) RemoveAllConsumers() int {
-	result := queue.redisClient.Del(queue.consumersKey)
+	result := queue.redisClient.Del(context.Background(), queue.consumersKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
@@ -364,7 +365,7 @@ func (queue *redisQueue) consume() {
 }
 
 func (queue *redisQueue) migrateExpiredDeliveries(from string, to string, curr time.Time) bool {
-	cmd := queue.redisClient.Eval(
+	cmd := queue.redisClient.Eval(context.Background(),
 		`-- Get all of the jobs with an expired "score"...
 		local val = redis.call('zrangebyscore', KEYS[1], '-inf', ARGV[1])
 
@@ -403,7 +404,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	}
 
 	for i := 0; i < batchSize; i++ {
-		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+		result := queue.redisClient.RPopLPush(context.Background(), queue.readyKey, queue.unackedKey)
 		if redisErrIsNil(result) {
 			// debug(fmt.Sprintf("rmq queue consumed last batch %s %d", queue, i)) // COMMENTOUT
 			return false
@@ -478,7 +479,7 @@ func stopTimer(timer *time.Timer) {
 // return number of deleted list items
 // https://www.redisgreen.net/blog/deleting-large-lists
 func (queue *redisQueue) deleteRedisList(key string) int {
-	llenResult := queue.redisClient.LLen(key)
+	llenResult := queue.redisClient.LLen(context.Background(), key)
 	total := int(llenResult.Val())
 	if total == 0 {
 		return 0 // nothing to do
@@ -493,14 +494,14 @@ func (queue *redisQueue) deleteRedisList(key string) int {
 		}
 
 		// remove one batch
-		queue.redisClient.LTrim(key, 0, int64(-1-batchSize))
+		queue.redisClient.LTrim(context.Background(), key, 0, int64(-1-batchSize))
 	}
 
 	return total
 }
 
 func (queue *redisQueue) deleteRedisSortedSet(key string) int {
-	zcountResult := queue.redisClient.ZCount(key, "-inf", "+inf")
+	zcountResult := queue.redisClient.ZCount(context.Background(), key, "-inf", "+inf")
 	total := int(zcountResult.Val())
 	if total == 0 {
 		return 0 // nothing to do
@@ -515,7 +516,7 @@ func (queue *redisQueue) deleteRedisSortedSet(key string) int {
 		}
 
 		// remove one batch
-		queue.redisClient.ZRemRangeByRank(key, 0, int64(-1-batchSize))
+		queue.redisClient.ZRemRangeByRank(context.Background(), key, 0, int64(-1-batchSize))
 	}
 
 	return total
